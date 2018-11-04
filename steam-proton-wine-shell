@@ -14,8 +14,8 @@ if [ "$STEAM_LIBRARY" == "" ]; then
         fi
     done
 fi
-if [ "$STEAM_LIBRARY" -eq "" ]; then
-    echo "Steam librray not found"
+if [ -z "$STEAM_LIBRARY" ]; then
+    echo "Steam library not found"
     exit 1
 fi
 
@@ -48,7 +48,8 @@ for APPID in `ls "$PROTON_INFO_DIR"`; do
     else
         TITLE="`cat \"$TITLE_CACHE_FNAME\"`"
     fi
-    DIRECTORY="$PROTON_DIR/$APPID/pfx"
+    echo "$TITLE"
+    DIRECTORY="$PROTON_INFO_DIR/$APPID/pfx"
     if [ -d "$DIRECTORY" ]; then
         APPIDS+=("$APPID")
         APPTITLES+=("$TITLE")
@@ -75,9 +76,8 @@ CHOICE=$(dialog --clear \
                 "${OPTIONS[@]}" \
                 2>&1 >/dev/tty)
 if [ "$?" -ne "0" ]; then
-    clear
     echo "Cancelled"
-    exit 1
+
 fi
 clear
 
