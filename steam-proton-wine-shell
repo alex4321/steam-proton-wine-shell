@@ -1,0 +1,98 @@
+#!/bin/env bash
+
+#########################################################################
+# Searching for Steam library directory if not specified as first param #
+#########################################################################
+STEAM_LIBRARY="$1"
+echo "Searching for Steam library directory"
+if [ "$STEAM_LIBRARY" == "" ]; then
+    MOUNTPOINTS=`df --output=target | grep "/"`
+    MOUNTPOINTS="$MOUNTPOINTS\n$HOME/SteamLibrary"
+    for MOUNTPOINT in $MOUNTPOINTS; do
+        if [ -d "$MOUNTPOINT/SteamLibrary" ]; then
+            STEAM_LIBRARY="$MOUNTPOINT/SteamLibrary"
+        fi
+    done
+fi
+if [ "$STEAM_LIBRARY" -eq "" ]; then
+    echo "Steam librray not found"
+    exit 1
+fi
+
+#######################################################
+# Retrieving information about installed applications #
+#######################################################
+echo "Found Steam library at $STEAM_LIBRARY"
+PROTON_INFO_DIR="$STEAM_LIBRARY/steamapps/compatdata"
+if ! [ -d "$PROTON_INFO_DIR" ]; then
+    echo "$PROTON_INFO_DIR not exists in this Steam library"
+    exit 1
+fi
+echo "Getting application titles"
+APPIDS=()
+APPTITLES=()
+PREFIXES=()
+TITLE_CACHE_DIR="$HOME/.steam-title-cache"
+if ! [ -d "$TITLE_CACHE_DIR"  ]; then
+    mkdir "$TITLE_CACHE_DIR"
+fi
+for APPID in `ls "$PROTON_INFO_DIR"`; do
+    TITLE_CACHE_FNAME="$TITLE_CACHE_DIR/$APPID"
+    if ! [ -f "$TITLE_CACHE_FNAME" ]; then
+        URL="https://steamcommunity.com/app/$APPID"
+        TITLE_TAG=`curl "$URL" 2>/dev/null | grep -o "<title>.*</title>"`
+        TITLE="${TITLE_TAG/<title>/}"
+        TITLE="${TITLE/<\/title>/}"
+        TITLE="${TITLE/Steam Community\ \:\:\ /}"
+        echo "$TITLE" > "$TITLE_CACHE_FNAME"
+    else
+        TITLE="`cat \"$TITLE_CACHE_FNAME\"`"
+    fi
+    DIRECTORY="$PROTON_DIR/$APPID/pfx"
+    if [ -d "$DIRECTORY" ]; then
+        APPIDS+=("$APPID")
+        APPTITLES+=("$TITLE")
+        PREFIXES+=("$DIRECTORY")
+    fi
+done
+
+#################
+# Building menu #
+#################
+OPTIONS=()
+APPCOUNT=${#APPIDS[@]}
+for I in $(seq 0 "$(($APPCOUNT-1))"); do
+    OPTIONS+=($I "${APPTITLES[$I]}")
+done
+HEIGHT=30
+WIDTH=60
+CHOICE_HEIGHT=20
+CHOICE=$(dialog --clear \
+                --backtitle "Proton configuration" \
+                --title "Select application to configure" \
+                --menu "Choose one of found applications" \
+                $HEIGHT $WIDTH $CHOICE_HEIGHT \
+                "${OPTIONS[@]}" \
+                2>&1 >/dev/tty)
+if [ "$?" -ne "0" ]; then
+    clear
+    echo "Cancelled"
+    exit 1
+fi
+clear
+
+########################################
+# Running shell for chosen application #
+########################################
+TITLE="${APPTITLES[$CHOICE]}"
+PREFIX="${PREFIXES[$CHOICE]}"
+PROTON_VERSION_FILE="${PREFIXES[$CHOICE]}/../version"
+PROTON_VERSION="`cat \"$PROTON_VERSION_FILE\" | sed -e 's/-.*//g'`"
+PROTON_VERSION_DIRECTORY="$STEAM_LIBRARY/steamapps/common/Proton $PROTON_VERSION/"
+echo "Selected: $TITLE"
+echo "Wine prefix: $PREFIX"
+echo "Proton version: $PROTON_VERSION in $PROTON_VERSION_DIRECTORY"
+export WINEPREFIX="$PREFIX"
+export PATH="$PROTON_VERSION_DIRECTORY/dist/bin:$PATH"
+cd "$WINEPREFIX"
+bash -i
