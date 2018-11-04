@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/bin/bash
 
 #########################################################################
 # Searching for Steam library directory if not specified as first param #
